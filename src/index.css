@@ -1,0 +1,83 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Barlow", "Segoe UI", sans-serif;
+  --font-display: "Barlow Condensed", "Barlow", sans-serif;
+  --color-ink: #172033;
+  --color-muted: #5c6b7e;
+  --color-navy-950: #071422;
+  --color-navy-900: #0c2340;
+  --color-navy-800: #14345c;
+  --color-navy-700: #1e4b80;
+  --color-gold: #a68445;
+  --color-gold-soft: #f3e6c8;
+  --color-paper: #f4f1ea;
+  --color-card: #fffcf8;
+  --color-line: #e0d8cb;
+  --color-danger: #8d2f2f;
+  --color-ok: #1d6b45;
+  --color-reservado: #d5e4f6;
+  --color-ocupado: #1e4b80;
+  --color-limpeza: #f4e3c2;
+  --color-encerrada: #e5e0d6;
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    margin: 0;
+    background: var(--color-paper);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+  }
+
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
+    touch-action: manipulation;
+  }
+
+  button:focus-visible,
+  a:focus-visible,
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible {
+    outline: 2px solid var(--color-gold);
+    outline-offset: 2px;
+  }
+}
+
+.login-bg {
+  background-color: #071422;
+  background-image:
+    linear-gradient(180deg, rgba(166, 132, 69, 0.16), transparent 32%),
+    repeating-linear-gradient(90deg, transparent, transparent 46px, rgba(255, 255, 255, 0.035) 47px),
+    repeating-linear-gradient(0deg, transparent, transparent 46px, rgba(255, 255, 255, 0.035) 47px);
+}
+
+.map-scroll {
+  overflow: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.blocked-fill {
+  background: repeating-linear-gradient(135deg, #5e6772, #5e6772 8px, #4c555f 8px, #4c555f 16px);
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+
+  body {
+    background: white;
+  }
+}
