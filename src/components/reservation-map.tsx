@@ -48,7 +48,7 @@ export function ReservationMap({
               style={{ width: DAY, height: 52 }}
             >
               <span>{weekdayShort(day)}</span>
-              <span className="font-display text-lg leading-none">{dayNumber(day)}</span>
+              <span className="text-sm font-semibold leading-none">{dayNumber(day)}</span>
             </div>
           ))}
         </div>
@@ -62,7 +62,7 @@ export function ReservationMap({
                 data-testid={`room-${room.number}`}
               >
                 <div className="min-w-0 flex-1">
-                  <p className="font-display text-2xl leading-none text-navy-900">{room.number}</p>
+                  <p className="text-base font-semibold leading-none text-navy-900 tabular-nums">{room.number}</p>
                   <p className="truncate text-[11px] text-muted">{room.name}</p>
                 </div>
                 <button
@@ -87,15 +87,18 @@ export function ReservationMap({
                         key={day}
                         type="button"
                         disabled={covered}
-                        aria-label={covered ? undefined : `Reservar ${room.name} em ${day.split('-').reverse().join('/')}`}
+                        aria-label={covered ? undefined : `Nova reserva em ${room.name} no dia ${day.split('-').reverse().join('/')}`}
+                        title={covered ? undefined : `Nova reserva · ${room.name}`}
                         onClick={() => onCreate(room.id, day)}
                         className={cn(
-                          'h-full shrink-0 border-r border-line/80',
+                          'group flex h-full shrink-0 items-center justify-center border-r border-line/80',
                           cleaning ? 'bg-limpeza' : isWeekend(day) ? 'bg-navy-900/4' : 'bg-white',
-                          !covered && 'hover:bg-gold-soft/50',
+                          !covered && 'hover:bg-navy-800/10',
                         )}
                         style={{ width: DAY }}
-                      />
+                      >
+                        {covered ? null : <span className="pointer-events-none hidden text-sm font-semibold text-navy-800 group-hover:block">+</span>}
+                      </button>
                     )
                   })}
                 </div>

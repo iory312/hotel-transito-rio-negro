@@ -24,6 +24,32 @@ export function createSeedDatabase(today = todayISO()): DemoDatabase {
   return {
     rooms,
     settings: { hotelName: 'Hotel de Trânsito Rio Negro', exemptionAge: 6 },
+    guestDependents: [
+      {
+        id: 'gdep-helena',
+        guestId: 'guest-paulo',
+        fullName: 'Helena Monteiro',
+        birthDate: addYears(pauloIn, -11),
+      },
+      {
+        id: 'gdep-caio',
+        guestId: 'guest-paulo',
+        fullName: 'Caio Monteiro',
+        birthDate: addYears(pauloIn, -4),
+      },
+      {
+        id: 'gdep-ana',
+        guestId: 'guest-jose',
+        fullName: 'Ana Azevedo',
+        birthDate: addYears(joseIn, -6),
+      },
+      {
+        id: 'gdep-clara',
+        guestId: 'guest-bruno',
+        fullName: 'Clara Fachin',
+        birthDate: addYears(brunoIn, -34),
+      },
+    ],
     guests: [
       {
         id: 'guest-paulo',

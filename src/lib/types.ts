@@ -85,6 +85,17 @@ export interface GuestDraft {
   notes: string
 }
 
+export interface GuestDependent {
+  id: string
+  guestId: string
+  fullName: string
+  birthDate: string
+}
+
+export interface SaveGuestInput extends GuestDraft {
+  dependents: DependentDraft[]
+}
+
 export interface DependentDraft {
   fullName: string
   birthDate: string
@@ -106,6 +117,7 @@ export interface SaveStayInput {
 export interface DemoDatabase {
   rooms: Room[]
   guests: Guest[]
+  guestDependents: GuestDependent[]
   reservations: Reservation[]
   dependents: Dependent[]
   payments: Payment[]

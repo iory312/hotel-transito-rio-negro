@@ -1,5 +1,6 @@
 import { isISODate, todayISO } from '@/lib/dates.ts'
 import {
+  assertDependents,
   assertExemptionAge,
   assertGuest,
   assertRoomIdentity,
@@ -10,7 +11,7 @@ import {
   shouldMarkCleaning,
 } from '@/lib/domain.ts'
 import type { GuestProfile, HotelRepository } from '@/lib/repository.ts'
-import type { DemoDatabase, PaymentMethod, Reservation, Room, SaveStayInput, Stay } from '@/lib/types.ts'
+import type { DemoDatabase, PaymentMethod, Reservation, Room, SaveGuestInput, SaveStayInput, Stay } from '@/lib/types.ts'
 
 const PAYMENT_METHODS = new Set<PaymentMethod>(['dinheiro', 'pix', 'transferencia', 'cartao'])
 
@@ -58,8 +59,9 @@ export function createMemoryRepository(
   return {
     mode: options?.mode ?? 'demo',
     host: null,
-    async listRooms() {
-      return clone(db.rooms.filter((room) => room.active).sort((a, b) => a.sortOrder - b.sortOrder))
+    async listRooms(options) {
+      const rows = db.rooms.filter((room) => options?.includeInactive || room.active)
+      return clone(rows.sort((a, b) => a.sortOrder - b.sortOrder))
     },
     async updateRoom(id, patch) {
       const room = db.rooms.find((item) => item.id === id)
@@ -77,6 +79,7 @@ export function createMemoryRepository(
       room.name = name.trim()
       if (patch.notes !== undefined) room.notes = patch.notes
       if (patch.housekeeping) room.housekeeping = patch.housekeeping
+      if (typeof patch.active === 'boolean') room.active = patch.active
       persist()
     },
     async listGuests(search) {
@@ -97,21 +100,48 @@ export function createMemoryRepository(
       const reservations = db.reservations
         .filter((reservation) => reservation.guestId === id)
         .sort((a, b) => b.checkIn.localeCompare(a.checkIn))
-      return { guest: clone(guest), stays: staysOf(db, reservations) }
+      const family = db.guestDependents.filter((item) => item.guestId === id)
+      return { guest: clone(guest), dependents: clone(family), stays: staysOf(db, reservations) }
     },
-    async saveGuest(guest) {
-      assertGuest(guest)
-      const current = db.guests.find((item) => item.id === guest.id)
-      if (!current) throw new DomainError('Hóspede não encontrado.')
-      const duplicate = db.guests.find((item) => item.id !== guest.id && item.nip.trim() === guest.nip.trim())
+    async saveGuest(input: SaveGuestInput) {
+      assertGuest(input)
+      assertDependents(input.dependents)
+      const nip = input.nip.trim()
+      const duplicate = db.guests.find((item) => item.id !== input.id && item.nip.trim() === nip)
       if (duplicate) throw new DomainError('NIP já cadastrado para outro militar.')
-      current.fullName = guest.fullName.trim()
-      current.rank = guest.rank.trim()
-      current.nip = guest.nip.trim()
-      current.om = guest.om.trim()
-      current.phone = guest.phone.trim()
-      current.notes = guest.notes
+      let id = input.id
+      if (id) {
+        const current = db.guests.find((item) => item.id === id)
+        if (!current) throw new DomainError('Hóspede não encontrado.')
+        current.fullName = input.fullName.trim()
+        current.rank = input.rank.trim()
+        current.nip = nip
+        current.om = input.om.trim()
+        current.phone = input.phone.trim()
+        current.notes = input.notes
+      } else {
+        id = crypto.randomUUID()
+        db.guests.push({
+          id,
+          fullName: input.fullName.trim(),
+          rank: input.rank.trim(),
+          nip,
+          om: input.om.trim(),
+          phone: input.phone.trim(),
+          notes: input.notes,
+        })
+      }
+      db.guestDependents = db.guestDependents.filter((item) => item.guestId !== id)
+      for (const dependent of input.dependents) {
+        db.guestDependents.push({
+          id: crypto.randomUUID(),
+          guestId: id,
+          fullName: dependent.fullName.trim(),
+          birthDate: dependent.birthDate,
+        })
+      }
       persist()
+      return id
     },
     async listReservations(from, to) {
       const rows = db.reservations.filter(

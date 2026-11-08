@@ -2,18 +2,17 @@
 
 @theme {
   --font-sans: "Barlow", "Segoe UI", sans-serif;
-  --font-display: "Barlow Condensed", "Barlow", sans-serif;
-  --color-ink: #172033;
-  --color-muted: #5c6b7e;
-  --color-navy-950: #071422;
-  --color-navy-900: #0c2340;
-  --color-navy-800: #14345c;
-  --color-navy-700: #1e4b80;
-  --color-gold: #a68445;
-  --color-gold-soft: #f3e6c8;
-  --color-paper: #f4f1ea;
-  --color-card: #fffcf8;
-  --color-line: #e0d8cb;
+  --color-ink: #1c2430;
+  --color-muted: #5d6b7c;
+  --color-navy-950: #10192b;
+  --color-navy-900: #17304f;
+  --color-navy-800: #1f4268;
+  --color-navy-700: #2c5580;
+  --color-gold: #b0893e;
+  --color-gold-soft: #f4efe3;
+  --color-paper: #e7edf3;
+  --color-card: #ffffff;
+  --color-line: #d3dbe4;
   --color-danger: #8d2f2f;
   --color-ok: #1d6b45;
   --color-reservado: #d5e4f6;
@@ -52,14 +51,6 @@
     outline: 2px solid var(--color-gold);
     outline-offset: 2px;
   }
-}
-
-.login-bg {
-  background-color: #071422;
-  background-image:
-    linear-gradient(180deg, rgba(166, 132, 69, 0.16), transparent 32%),
-    repeating-linear-gradient(90deg, transparent, transparent 46px, rgba(255, 255, 255, 0.035) 47px),
-    repeating-linear-gradient(0deg, transparent, transparent 46px, rgba(255, 255, 255, 0.035) 47px);
 }
 
 .map-scroll {

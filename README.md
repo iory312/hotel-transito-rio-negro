@@ -63,6 +63,12 @@ Ele cria as tabelas `rooms`, `guests`, `reservations`, `reservation_dependents`,
 
 Não há dado de militar na semente. Os exemplos de hóspede existem apenas no modo demonstração.
 
+5. Execute em seguida:
+
+`supabase/migrations/20261108164500_guest_register_room_active.sql`
+
+Esse arquivo libera o cadastro de hóspede novo em `save_guest` (a função inicial só atualizava quem já existia), grava os dependentes do militar em `guest_dependents` e permite marcar a UH como inativa. Sem ele, a recepção não consegue cadastrar hóspede fora de uma reserva.
+
 ## Criar o primeiro usuário da recepção
 
 O cadastro público não autoriza ninguém. Um login só lê o hotel depois de entrar em `staff`.
@@ -96,11 +102,12 @@ O nome exibido na recepção fica em `profiles` e é editado em Administração.
 
 ## Telas
 
-- **Mapa de reservas:** 14 quartos por dias do mês. No celular, o calendário desliza na horizontal e a coluna do quarto fica fixa.
-- **Reserva:** datas, quarto, diária, titular, dependentes, conta ao vivo, pagamentos, check-in, check-out, cancelamento e bloqueio.
-- **Hóspedes:** busca e histórico.
+- **Mapa de reservas:** quartos à esquerda, dias no topo, estadias coloridas (livre, reservado, ocupado, limpeza, bloqueado, encerrada). **Nova reserva** fica no topo; um dia livre do quarto também abre a reserva. No celular, o calendário desliza na horizontal e a coluna do quarto fica fixa.
+- **Reserva:** datas, quarto, diária digitada na estada, titular, dependentes, conta ao vivo, pagamentos, check-in, check-out, cancelamento e bloqueio.
+- **Hóspedes:** lista, busca e **Novo hóspede** (nome, posto, NIP, OM, telefone e dependentes), com edição do cadastro.
+- **Quartos:** as 14 UHs, com número, nome, notas, limpeza e ativo. UH inativa sai do mapa.
 - **Relatórios:** entradas, saídas, quem está na casa, café da manhã e ocupação do mês.
-- **Administração:** quartos e idade de isenção.
+- **Administração:** idade de isenção e nome da recepção.
 
 ## Publicar no GitHub Pages
 

@@ -9,6 +9,7 @@ import { GateScreen, LoginPage } from '@/pages/login-page.tsx'
 import { MapPage } from '@/pages/map-page.tsx'
 import { ReportsPage } from '@/pages/reports-page.tsx'
 import { ReservationPage } from '@/pages/reservation-page.tsx'
+import { RoomsPage } from '@/pages/rooms-page.tsx'
 
 export default function App() {
   const { state, signOut } = useSession()
@@ -37,7 +38,9 @@ export default function App() {
         <Route path="/reserva/nova" element={<ReservationPage />} />
         <Route path="/reserva/:id" element={<ReservationPage />} />
         <Route path="/hospedes" element={<GuestsPage />} />
+        <Route path="/hospedes/novo" element={<GuestPage />} />
         <Route path="/hospedes/:id" element={<GuestPage />} />
+        <Route path="/quartos" element={<RoomsPage />} />
         <Route path="/relatorios" element={<ReportsPage />} />
         <Route path="/admin" element={<AdminPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />

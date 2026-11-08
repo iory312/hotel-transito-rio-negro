@@ -4,8 +4,8 @@ import type { Bill } from '@/lib/types.ts'
 export function BillingCard({ bill }: { bill: Bill }) {
   const balanceLabel = bill.balance > 0 ? 'Saldo pendente' : bill.balance < 0 ? 'Crédito do hóspede' : 'Quitado'
   return (
-    <section className="rounded-lg border border-line bg-card p-4 shadow-sm" aria-live="polite">
-      <h2 className="font-display text-2xl text-navy-900">Conta da estada</h2>
+    <section className="rounded-md border border-line bg-card p-4" aria-live="polite">
+      <h2 className="text-base font-semibold text-navy-900">Conta da estada</h2>
       <p className="mt-1 text-sm leading-5 text-muted">
         O titular sempre paga. Dependente com mais de {bill.exemptionAge} anos na data de entrada também paga. Com{' '}
         {bill.exemptionAge} anos ou menos, é isento.
@@ -43,7 +43,7 @@ export function BillingCard({ bill }: { bill: Bill }) {
         </div>
       </dl>
       <p className="mt-3 text-xs text-muted">Total = diária × noites × pagantes</p>
-      <p className="mt-1 font-display text-4xl text-navy-950" data-testid="billing-total">
+      <p className="mt-1 text-2xl font-semibold text-navy-950" data-testid="billing-total">
         {formatMoney(bill.total)}
       </p>
       <p className={bill.balance > 0 ? 'text-sm font-semibold text-danger' : 'text-sm font-semibold text-ok'} data-testid="billing-balance">

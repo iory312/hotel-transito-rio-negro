@@ -5,7 +5,7 @@ import { DomainError } from '@/lib/domain.ts'
 import type { HotelRepository } from '@/lib/repository.ts'
 import type { DemoDatabase } from '@/lib/types.ts'
 
-const STORAGE_KEY = 'htrn-demo-v1'
+const STORAGE_KEY = 'htrn-demo-v2'
 export const DEMO_SESSION_KEY = 'htrn-demo-session'
 
 export interface DemoSession {
@@ -43,6 +43,7 @@ function readDatabase(): DemoDatabase {
   try {
     const parsed = JSON.parse(raw) as DemoDatabase
     if (!Array.isArray(parsed.rooms) || parsed.rooms.length !== 14 || !parsed.settings) return createSeedDatabase()
+    if (!Array.isArray(parsed.guestDependents)) parsed.guestDependents = []
     return parsed
   } catch {
     return createSeedDatabase()

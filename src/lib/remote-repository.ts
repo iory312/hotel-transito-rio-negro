@@ -5,6 +5,7 @@ import type { HotelRepository } from '@/lib/repository.ts'
 import type {
   Dependent,
   Guest,
+  GuestDependent,
   HousekeepingStatus,
   Payment,
   PaymentMethod,
@@ -128,8 +129,10 @@ export function createRemoteRepository(client: SupabaseClient, host: string | nu
   return {
     mode: 'remote',
     host,
-    async listRooms() {
-      const result = await client.from('rooms').select('id, number, name, housekeeping, notes, sort_order, active').eq('active', true).order('sort_order')
+    async listRooms(options) {
+      let request = client.from('rooms').select('id, number, name, housekeeping, notes, sort_order, active').order('sort_order')
+      if (!options?.includeInactive) request = request.eq('active', true)
+      const result = await request
       const rows = await expectOk(result, 'Não foi possível carregar os quartos.')
       return (rows as RoomRow[]).map((room) => ({
         id: room.id,
@@ -142,11 +145,12 @@ export function createRemoteRepository(client: SupabaseClient, host: string | nu
       }))
     },
     async updateRoom(id, patch) {
-      const update: Record<string, string> = {}
+      const update: Record<string, string | boolean> = {}
       if (patch.number !== undefined) update.number = patch.number.trim()
       if (patch.name !== undefined) update.name = patch.name.trim()
       if (patch.notes !== undefined) update.notes = patch.notes
       if (patch.housekeeping) update.housekeeping = patch.housekeeping
+      if (typeof patch.active === 'boolean') update.active = patch.active
       const result = await client.from('rooms').update(update).eq('id', id)
       await expectOk(result, 'Não foi possível salvar o quarto.')
     },
@@ -170,23 +174,43 @@ export function createRemoteRepository(client: SupabaseClient, host: string | nu
         .order('check_in', { ascending: false })
         .limit(200)
       const stays = await expectOk(staysResult, 'Não foi possível carregar o histórico.')
-      return { guest: mapGuest(guestRow as GuestRow), stays: (stays as StayRow[]).map(mapStay) }
+      const dependentResult = await client
+        .from('guest_dependents')
+        .select('id, guest_id, full_name, birth_date')
+        .eq('guest_id', id)
+        .order('full_name')
+      const dependentRows = await expectOk(dependentResult, 'Não foi possível carregar os dependentes.')
+      const dependents: GuestDependent[] = (dependentRows as { id: string; guest_id: string; full_name: string; birth_date: string }[]).map(
+        (dependent) => ({
+          id: dependent.id,
+          guestId: dependent.guest_id,
+          fullName: dependent.full_name,
+          birthDate: dependent.birth_date,
+        }),
+      )
+      return { guest: mapGuest(guestRow as GuestRow), dependents, stays: (stays as StayRow[]).map(mapStay) }
     },
-    async saveGuest(guest) {
-      await expectOk(
+    async saveGuest(input) {
+      const id = await expectOk(
         await client.rpc('save_guest', {
           payload: {
-            id: guest.id,
-            full_name: guest.fullName,
-            rank: guest.rank,
-            nip: guest.nip,
-            om: guest.om,
-            phone: guest.phone,
-            notes: guest.notes,
+            id: input.id ?? null,
+            full_name: input.fullName,
+            rank: input.rank,
+            nip: input.nip,
+            om: input.om,
+            phone: input.phone,
+            notes: input.notes,
+            dependents: input.dependents.map((dependent) => ({
+              full_name: dependent.fullName,
+              birth_date: dependent.birthDate,
+            })),
           },
         }),
         'Não foi possível salvar o hóspede.',
       )
+      if (typeof id !== 'string' || id.length === 0) throw new DomainError('Não foi possível salvar o hóspede.')
+      return id
     },
     async listReservations(from, to) {
       const result = await client

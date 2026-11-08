@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { BillingCard } from '@/components/billing-card.tsx'
+import { DependentEditor, type DependentRow } from '@/components/dependent-editor.tsx'
 import { ConfirmDialog } from '@/components/confirm-dialog.tsx'
 import { Field } from '@/components/field.tsx'
 import { Button } from '@/components/ui/button.tsx'
@@ -14,12 +15,6 @@ import { toUserMessage } from '@/lib/errors.ts'
 import { PAYMENT_LABEL, RANKS, STATUS_LABEL } from '@/lib/labels.ts'
 import { formatMoney, formatRateInput, parseDailyRate, parsePaymentAmount } from '@/lib/money.ts'
 import type { Guest, PaymentMethod, Room, Settings, Stay, StayKind } from '@/lib/types.ts'
-
-interface DependentForm {
-  key: string
-  fullName: string
-  birthDate: string
-}
 
 const METHODS = Object.keys(PAYMENT_LABEL) as PaymentMethod[]
 
@@ -46,7 +41,7 @@ export function ReservationPage() {
   const [om, setOm] = useState('')
   const [phone, setPhone] = useState('')
   const [guestNotes, setGuestNotes] = useState('')
-  const [dependents, setDependents] = useState<DependentForm[]>([])
+  const [dependents, setDependents] = useState<DependentRow[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -218,7 +213,7 @@ export function ReservationPage() {
     }
   }
 
-  function chooseGuest(guest: Guest) {
+  async function chooseGuest(guest: Guest) {
     setGuestId(guest.id)
     setFullName(guest.fullName)
     setRank(guest.rank)
@@ -227,6 +222,15 @@ export function ReservationPage() {
     setPhone(guest.phone)
     setGuestNotes(guest.notes)
     setFinderOpen(false)
+    if (!repository) return
+    try {
+      const profile = await repository.getGuest(guest.id)
+      if (profile && profile.dependents.length > 0) {
+        setDependents(profile.dependents.map((dependent) => ({ key: dependent.id, fullName: dependent.fullName, birthDate: dependent.birthDate })))
+      }
+    } catch {
+      setError(null)
+    }
   }
 
   if (loading) return <p className="p-4 text-sm text-muted">Carregando a reserva…</p>
@@ -239,15 +243,21 @@ export function ReservationPage() {
   }
 
   return (
+    <div className="h-full overflow-auto">
     <div className="mx-auto grid w-full max-w-6xl gap-4 p-3 sm:p-4 lg:grid-cols-[minmax(0,1fr)_320px]">
       <div className="order-2 lg:order-1">
-        <Link to="/" className="text-sm font-semibold text-navy-800">
-          Voltar ao mapa
-        </Link>
-        <div className="mt-2 flex flex-wrap items-center gap-2">
-          <h2 className="font-display text-4xl text-navy-900">{stay ? 'Reserva' : 'Nova reserva'}</h2>
-          {stay ? <span className="rounded-full bg-navy-900 px-3 py-1 text-xs font-semibold text-white">{STATUS_LABEL[stay.status]}</span> : null}
+        <div className="sticky top-0 z-10 -mx-3 flex flex-wrap items-center gap-2 border-b border-line bg-paper px-3 py-2 sm:-mx-4 sm:px-4">
+          <Link to="/" className="text-sm font-semibold text-navy-800">
+            Mapa
+          </Link>
+          {stay ? <span className="rounded-md bg-navy-900 px-2 py-1 text-xs font-semibold text-white">{STATUS_LABEL[stay.status]}</span> : <span className="text-sm font-semibold">{kind === 'bloqueio' ? 'Novo bloqueio' : 'Nova reserva'}</span>}
+          {!locked ? (
+            <Button type="submit" form="stay-form" size="sm" className="ml-auto" disabled={saving} data-testid="save-reservation-top">
+              {saving ? 'Salvando…' : stay ? 'Salvar' : 'Registrar'}
+            </Button>
+          ) : null}
         </div>
+        <h2 className="mt-3 text-lg font-semibold text-navy-900">{stay ? (stay.guest?.fullName ?? 'Reserva') : 'Nova reserva'}</h2>
         {error ? (
           <p className="mt-3 rounded-md border border-danger/30 bg-white px-3 py-2 text-sm text-danger" role="alert">
             {error}
@@ -269,7 +279,7 @@ export function ReservationPage() {
         {stay && stay.status === 'bloqueado' ? (
           <Button className="mt-3" variant="outline" onClick={() => setConfirm({ title: 'Encerrar bloqueio', description: 'O período volta a aceitar reserva.', label: 'Encerrar bloqueio', run: () => runStatus('cancelada') })}>Encerrar bloqueio</Button>
         ) : null}
-        <form onSubmit={onSubmit} className="mt-4 flex flex-col gap-4">
+        <form id="stay-form" onSubmit={onSubmit} className="mt-4 flex flex-col gap-4">
           {!stay ? (
             <div className="grid grid-cols-2 gap-2">
               <Button type="button" variant={kind === 'hospedagem' ? 'default' : 'outline'} onClick={() => setKind('hospedagem')}>Hospedagem</Button>
@@ -305,7 +315,8 @@ export function ReservationPage() {
           </Field>
           {kind === 'hospedagem' ? (
             <fieldset className="rounded-lg border border-line bg-card p-3" disabled={locked}>
-              <legend className="px-1 font-display text-2xl text-navy-900">Titular militar</legend>
+              <legend className="px-1 text-sm font-semibold text-navy-900">Titular militar</legend>
+              <p className="mt-1 text-sm text-muted">Pode preencher aqui ou cadastrar antes em Hóspedes. O titular sempre paga.</p>
               <div className="mt-2 grid gap-2 sm:grid-cols-2">
                 <Button type="button" variant="outline" onClick={() => setFinderOpen(true)}>Buscar militar já cadastrado</Button>
                 <Button type="button" variant="ghost" onClick={() => { setGuestId(''); setFullName(''); setRank(''); setNip(''); setOm(''); setPhone(''); setGuestNotes('') }}>Limpar titular</Button>
@@ -326,22 +337,10 @@ export function ReservationPage() {
             </fieldset>
           ) : null}
           {kind === 'hospedagem' ? (
-            <fieldset className="rounded-lg border border-line bg-card p-3" disabled={locked}>
-              <legend className="px-1 font-display text-2xl text-navy-900">Dependentes</legend>
-              <div className="mt-3 flex flex-col gap-3">
-                {dependents.map((dependent, index) => (
-                  <div key={dependent.key} className="grid gap-2 rounded-md border border-line p-3 sm:grid-cols-[1fr_11rem_auto]">
-                    <Field id={`dep-name-${dependent.key}`} label="Nome">
-                      <Input id={`dep-name-${dependent.key}`} value={dependent.fullName} onChange={(event) => setDependents((rows) => rows.map((row) => row.key === dependent.key ? { ...row, fullName: event.target.value } : row))} />
-                    </Field>
-                    <Field id={`dep-birth-${dependent.key}`} label="Nascimento">
-                      <Input id={`dep-birth-${dependent.key}`} type="date" value={dependent.birthDate} onChange={(event) => setDependents((rows) => rows.map((row) => row.key === dependent.key ? { ...row, birthDate: event.target.value } : row))} />
-                    </Field>
-                    <Button type="button" variant="outline" className="sm:self-end" onClick={() => setDependents((rows) => rows.filter((row) => row.key !== dependent.key))}>Remover {index + 1}</Button>
-                  </div>
-                ))}
-                <Button type="button" variant="outline" data-testid="dependent-add" onClick={() => setDependents((rows) => [...rows, { key: crypto.randomUUID(), fullName: '', birthDate: '' }])}>Adicionar dependente</Button>
-              </div>
+            <fieldset className="rounded-md border border-line bg-card p-3" disabled={locked}>
+              <legend className="px-1 text-sm font-semibold text-navy-900">Dependentes desta estada</legend>
+              <p className="mt-1 mb-3 text-sm text-muted">Idade maior que a de isenção na entrada também paga. Com a idade de isenção ou menos, é isento. Ao escolher um militar já cadastrado, os dependentes do cadastro entram aqui.</p>
+              <DependentEditor rows={dependents} onChange={setDependents} disabled={locked} />
             </fieldset>
           ) : null}
           {!locked ? (
@@ -350,7 +349,7 @@ export function ReservationPage() {
         </form>
         {stay && stay.status !== 'bloqueado' && stay.status !== 'cancelada' ? (
           <section className="mt-6 rounded-lg border border-line bg-card p-3">
-            <h3 className="font-display text-2xl text-navy-900">Pagamentos</h3>
+            <h3 className="text-base font-semibold text-navy-900">Pagamentos</h3>
             <ul className="mt-2 divide-y divide-line">
               {stay.payments.length === 0 ? <li className="py-2 text-sm text-muted">Nenhum pagamento registrado.</li> : null}
               {stay.payments.map((payment) => (
@@ -380,7 +379,7 @@ export function ReservationPage() {
       <aside className="order-1 lg:order-2 lg:sticky lg:top-4 lg:self-start">
         {kind === 'bloqueio' ? (
           <section className="rounded-lg border border-line bg-card p-4">
-            <h2 className="font-display text-2xl text-navy-900">Bloqueio</h2>
+            <h2 className="text-base font-semibold text-navy-900">Bloqueio</h2>
             <p className="mt-2 text-sm text-muted">Manutenção não gera diária e não aceita hóspede. O período fica indisponível para reserva.</p>
           </section>
         ) : (
@@ -393,10 +392,10 @@ export function ReservationPage() {
           <DialogDescription>Pesquise por nome, NIP, posto ou organização.</DialogDescription>
           <Input className="mt-3" value={finderQuery} onChange={(event) => setFinderQuery(event.target.value)} placeholder="Nome, NIP ou OM" autoFocus />
           <ul className="mt-3 flex max-h-80 flex-col gap-2">
-            {finderResults.length === 0 ? <li className="text-sm text-muted">Nenhum militar encontrado.</li> : null}
+            {finderResults.length === 0 ? <li className="text-sm text-muted">Nenhum militar encontrado. Feche e preencha o titular, ou cadastre em Hóspedes.</li> : null}
             {finderResults.map((guest) => (
               <li key={guest.id}>
-                <button type="button" className="min-h-12 w-full rounded-md border border-line px-3 py-2 text-left hover:bg-paper" onClick={() => chooseGuest(guest)}>
+                <button type="button" className="min-h-12 w-full rounded-md border border-line px-3 py-2 text-left hover:bg-paper" onClick={() => void chooseGuest(guest)}>
                   <span className="block font-semibold">{guest.fullName}</span>
                   <span className="text-sm text-muted">{guest.rank} · NIP {guest.nip}</span>
                 </button>
@@ -414,6 +413,7 @@ export function ReservationPage() {
         onOpenChange={(open) => { if (!open) setConfirm(null) }}
         onConfirm={() => { if (confirm) void confirm.run() }}
       />
+    </div>
     </div>
   )
 }
