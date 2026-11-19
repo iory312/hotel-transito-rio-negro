@@ -8,8 +8,9 @@ import { Textarea } from '@/components/ui/textarea.tsx'
 import { useSession } from '@/context/session.tsx'
 import { formatDate } from '@/lib/dates.ts'
 import { buildBill } from '@/lib/domain.ts'
+import { guestLedger, paymentStanding } from '@/lib/desk.ts'
 import { toUserMessage } from '@/lib/errors.ts'
-import { RANKS, STATUS_LABEL } from '@/lib/labels.ts'
+import { PAYMENT_STATUS_LABEL, RANKS, STATUS_LABEL } from '@/lib/labels.ts'
 import { formatMoney } from '@/lib/money.ts'
 import type { GuestDraft, Stay } from '@/lib/types.ts'
 
@@ -130,6 +131,7 @@ export function GuestPage() {
         {creating ? null : (
           <section>
             <h3 className="text-base font-semibold text-navy-900">Histórico de estadas</h3>
+            <GuestSpend stays={stays} exemptionAge={exemptionAge} />
             {stays.length === 0 ? <p className="mt-2 text-sm text-muted">Nenhuma estada registrada. Lance a primeira pelo mapa.</p> : null}
             <ul className="mt-2 flex flex-col gap-2">
               {stays.map((stay) => {
@@ -146,7 +148,7 @@ export function GuestPage() {
                   <li key={stay.id}>
                     <Link to={`/reserva/${stay.id}`} className="block rounded-md border border-line bg-card p-3">
                       <span className="text-sm font-semibold">{stay.roomName} · {STATUS_LABEL[stay.status]}</span>
-                      <span className="mt-1 block text-sm text-muted">{formatDate(stay.checkIn)} a {formatDate(stay.checkOut)} · {formatMoney(bill.total)}</span>
+                      <span className="mt-1 block text-sm text-muted">{formatDate(stay.checkIn)} a {formatDate(stay.checkOut)} · {formatMoney(bill.total)} · {PAYMENT_STATUS_LABEL[paymentStanding(bill)]}</span>
                     </Link>
                   </li>
                 )
@@ -156,5 +158,15 @@ export function GuestPage() {
         )}
       </div>
     </div>
+  )
+}
+
+function GuestSpend({ stays, exemptionAge }: { stays: Stay[]; exemptionAge: number }) {
+  const ledger = guestLedger(stays, exemptionAge)
+  if (stays.length === 0) return null
+  return (
+    <p className="mt-1 text-sm text-muted">
+      {ledger.count} estada(s) não cancelada(s). Total gasto {formatMoney(ledger.total)}. Recebido {formatMoney(ledger.paid)}.
+    </p>
   )
 }

@@ -11,12 +11,14 @@ import { Textarea } from '@/components/ui/textarea.tsx'
 import { useSession } from '@/context/session.tsx'
 import { addDays, formatDate, isISODate, todayISO } from '@/lib/dates.ts'
 import { buildBill } from '@/lib/domain.ts'
+import { capacityWarning, occupantCount } from '@/lib/desk.ts'
 import { toUserMessage } from '@/lib/errors.ts'
-import { PAYMENT_LABEL, RANKS, STATUS_LABEL } from '@/lib/labels.ts'
+import { BLOCK_KIND_LABEL, PAYMENT_LABEL, RANKS, STATUS_LABEL } from '@/lib/labels.ts'
 import { formatMoney, formatRateInput, parseDailyRate, parsePaymentAmount } from '@/lib/money.ts'
-import type { Guest, PaymentMethod, Room, Settings, Stay, StayKind } from '@/lib/types.ts'
+import type { BlockKind, BookingStatus, Guest, PaymentMethod, Room, RoomCategory, Settings, Stay, StayKind } from '@/lib/types.ts'
 
 const METHODS = Object.keys(PAYMENT_LABEL) as PaymentMethod[]
+const BLOCK_KINDS = Object.keys(BLOCK_KIND_LABEL) as BlockKind[]
 
 export function ReservationPage() {
   const { id } = useParams()
@@ -25,6 +27,7 @@ export function ReservationPage() {
   const { state } = useSession()
   const repository = state.status === 'ready' ? state.repository : null
   const [rooms, setRooms] = useState<Room[]>([])
+  const [categories, setCategories] = useState<RoomCategory[]>([])
   const [settings, setSettings] = useState<Settings | null>(null)
   const [stay, setStay] = useState<Stay | null>(null)
   const [kind, setKind] = useState<StayKind>('hospedagem')
@@ -34,6 +37,8 @@ export function ReservationPage() {
   const [rateText, setRateText] = useState('')
   const [notes, setNotes] = useState('')
   const [blockReason, setBlockReason] = useState('')
+  const [blockKind, setBlockKind] = useState<BlockKind>('manutencao')
+  const [booking, setBooking] = useState<BookingStatus>('reservada')
   const [guestId, setGuestId] = useState('')
   const [fullName, setFullName] = useState('')
   const [rank, setRank] = useState('')
@@ -54,6 +59,8 @@ export function ReservationPage() {
   const [paymentDate, setPaymentDate] = useState(todayISO())
   const [paymentNotes, setPaymentNotes] = useState('')
   const [confirm, setConfirm] = useState<null | { title: string; description: string; label: string; run: () => Promise<void> }>(null)
+  const [cancelOpen, setCancelOpen] = useState(false)
+  const [cancelReason, setCancelReason] = useState('')
 
   useEffect(() => {
     if (!repository) return
@@ -62,10 +69,11 @@ export function ReservationPage() {
       setLoading(true)
       setError(null)
       try {
-        const [nextRooms, nextSettings, nextStay] = await Promise.all([
+        const [nextRooms, nextSettings, nextStay, nextCategories] = await Promise.all([
           repository!.listRooms(),
           repository!.getSettings(),
           id ? repository!.getReservation(id) : Promise.resolve(null),
+          repository!.listCategories(),
         ])
         if (cancelled) return
         if (id && !nextStay) {
@@ -74,6 +82,7 @@ export function ReservationPage() {
           return
         }
         setRooms(nextRooms)
+        setCategories(nextCategories)
         setSettings(nextSettings)
         setStay(nextStay)
         if (nextStay) {
@@ -84,6 +93,8 @@ export function ReservationPage() {
           setRateText(nextStay.status === 'bloqueado' ? '' : formatRateInput(nextStay.dailyRate))
           setNotes(nextStay.notes)
           setBlockReason(nextStay.blockReason)
+          setBlockKind(nextStay.blockKind || 'manutencao')
+          if (nextStay.status === 'pre_reserva' || nextStay.status === 'reservada') setBooking(nextStay.status)
           setGuestId(nextStay.guest?.id ?? '')
           setFullName(nextStay.guest?.fullName ?? '')
           setRank(nextStay.guest?.rank ?? '')
@@ -122,6 +133,9 @@ export function ReservationPage() {
   }, [finderOpen, finderQuery, repository])
 
   const locked = stay?.status === 'checkout' || stay?.status === 'cancelada'
+  const selectedRoom = rooms.find((room) => room.id === roomId)
+  const selectedCategory = categories.find((category) => category.id === selectedRoom?.categoryId)
+  const warning = kind === 'bloqueio' ? null : capacityWarning(occupantCount(fullName, dependents), selectedCategory?.capacity ?? null)
   const rate = parseDailyRate(rateText)
   const bill = useMemo(
     () =>
@@ -159,6 +173,8 @@ export function ReservationPage() {
         notes,
         kind,
         blockReason,
+        blockKind: kind === 'bloqueio' ? blockKind : undefined,
+        booking: kind === 'hospedagem' && !stay ? booking : undefined,
         guest:
           kind === 'bloqueio'
             ? null
@@ -175,17 +191,34 @@ export function ReservationPage() {
     }
   }
 
-  async function runStatus(status: 'ocupada' | 'checkout' | 'cancelada') {
+  async function runStatus(status: 'reservada' | 'ocupada' | 'checkout' | 'cancelada') {
     if (!repository || !stay) return
     setSaving(true)
     setError(null)
     try {
       await repository.setStatus(stay.id, status)
       await reload(stay.id)
-      setNotice(status === 'ocupada' ? 'Check-in registrado.' : status === 'checkout' ? 'Check-out registrado.' : 'Registro cancelado.')
+      setNotice(status === 'ocupada' ? 'Check-in registrado.' : status === 'reservada' ? 'Reserva confirmada.' : status === 'checkout' ? 'Check-out registrado.' : 'Registro cancelado.')
       setConfirm(null)
     } catch (err) {
       setError(toUserMessage(err, 'Não foi possível atualizar o status.'))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function confirmCancel() {
+    if (!repository || !stay) return
+    setSaving(true)
+    setError(null)
+    try {
+      await repository.cancelReservation(stay.id, cancelReason)
+      setCancelOpen(false)
+      setCancelReason('')
+      await reload(stay.id)
+      setNotice('Reserva cancelada.')
+    } catch (err) {
+      setError(toUserMessage(err, 'Não foi possível cancelar a reserva.'))
     } finally {
       setSaving(false)
     }
@@ -247,7 +280,7 @@ export function ReservationPage() {
     <div className="mx-auto grid w-full max-w-6xl gap-4 p-3 sm:p-4 lg:grid-cols-[minmax(0,1fr)_320px]">
       <div className="order-2 lg:order-1">
         <div className="sticky top-0 z-10 -mx-3 flex flex-wrap items-center gap-2 border-b border-line bg-paper px-3 py-2 sm:-mx-4 sm:px-4">
-          <Link to="/" className="text-sm font-semibold text-navy-800">
+          <Link to="/mapa" className="text-sm font-semibold text-navy-800">
             Mapa
           </Link>
           {stay ? <span className="rounded-md bg-navy-900 px-2 py-1 text-xs font-semibold text-white">{STATUS_LABEL[stay.status]}</span> : <span className="text-sm font-semibold">{kind === 'bloqueio' ? 'Novo bloqueio' : 'Nova reserva'}</span>}
@@ -264,16 +297,19 @@ export function ReservationPage() {
           </p>
         ) : null}
         {notice ? <p className="mt-3 rounded-md bg-gold-soft px-3 py-2 text-sm text-navy-950">{notice}</p> : null}
-        {stay && stay.status === 'reservada' ? (
+        {stay && (stay.status === 'pre_reserva' || stay.status === 'reservada') ? (
           <div className="mt-3 grid gap-2 sm:grid-cols-2">
+            {stay.status === 'pre_reserva' ? (
+              <Button variant="outline" onClick={() => void runStatus('reservada')} disabled={saving}>Confirmar reserva</Button>
+            ) : null}
             <Button onClick={() => void runStatus('ocupada')} disabled={saving}>Fazer check-in</Button>
-            <Button variant="outline" onClick={() => setConfirm({ title: 'Cancelar reserva', description: 'O quarto volta a ficar livre neste período.', label: 'Cancelar reserva', run: () => runStatus('cancelada') })}>Cancelar reserva</Button>
+            <Button variant="outline" onClick={() => { setCancelReason(''); setCancelOpen(true) }}>Cancelar reserva</Button>
           </div>
         ) : null}
         {stay && stay.status === 'ocupada' ? (
           <div className="mt-3 grid gap-2 sm:grid-cols-2">
             <Button onClick={() => void runStatus('checkout')} disabled={saving}>Fazer check-out</Button>
-            <Button variant="outline" onClick={() => setConfirm({ title: 'Cancelar hospedagem', description: 'A saída antecipada envia o quarto para limpeza.', label: 'Cancelar hospedagem', run: () => runStatus('cancelada') })}>Cancelar hospedagem</Button>
+            <Button variant="outline" onClick={() => { setCancelReason(''); setCancelOpen(true) }}>Cancelar hospedagem</Button>
           </div>
         ) : null}
         {stay && stay.status === 'bloqueado' ? (
@@ -284,6 +320,12 @@ export function ReservationPage() {
             <div className="grid grid-cols-2 gap-2">
               <Button type="button" variant={kind === 'hospedagem' ? 'default' : 'outline'} onClick={() => setKind('hospedagem')}>Hospedagem</Button>
               <Button type="button" variant={kind === 'bloqueio' ? 'default' : 'outline'} onClick={() => setKind('bloqueio')}>Bloqueio</Button>
+            </div>
+          ) : null}
+          {!stay && kind === 'hospedagem' ? (
+            <div className="grid grid-cols-2 gap-2">
+              <Button type="button" variant={booking === 'pre_reserva' ? 'default' : 'outline'} onClick={() => setBooking('pre_reserva')}>Pré-reserva</Button>
+              <Button type="button" variant={booking === 'reservada' ? 'default' : 'outline'} onClick={() => setBooking('reservada')}>Confirmada</Button>
             </div>
           ) : null}
           <Field id="room" label="Quarto">
@@ -301,10 +343,24 @@ export function ReservationPage() {
               <Input id="check-out" type="date" required value={checkOut} disabled={locked} onChange={(event) => { if (event.target.value === '' || isISODate(event.target.value)) setCheckOut(event.target.value) }} />
             </Field>
           </div>
+          {warning ? (
+            <p role="status" className="rounded-md border border-gold bg-gold-soft px-3 py-2 text-sm text-navy-950">
+              {warning} A recepção pode registrar mesmo assim. A diária e quem paga não mudam.
+            </p>
+          ) : null}
           {kind === 'bloqueio' ? (
-            <Field id="reason" label="Motivo do bloqueio">
-              <Input id="reason" value={blockReason} disabled={locked} onChange={(event) => setBlockReason(event.target.value)} placeholder="Ex.: manutenção do climatizador" />
-            </Field>
+            <>
+              <Field id="block-kind" label="Tipo de bloqueio">
+                <select id="block-kind" className={controlClass} value={blockKind} disabled={locked} onChange={(event) => setBlockKind(event.target.value as BlockKind)}>
+                  {BLOCK_KINDS.map((kindOption) => (
+                    <option key={kindOption} value={kindOption}>{BLOCK_KIND_LABEL[kindOption]}</option>
+                  ))}
+                </select>
+              </Field>
+              <Field id="reason" label="Detalhe do bloqueio">
+                <Input id="reason" value={blockReason} disabled={locked} onChange={(event) => setBlockReason(event.target.value)} placeholder="Ex.: manutenção do climatizador" />
+              </Field>
+            </>
           ) : (
             <Field id="rate" label="Diária" hint="Informe o valor vigente. A tarifa não fica gravada no sistema como tabela.">
               <Input id="rate" inputMode="decimal" value={rateText} disabled={locked} onChange={(event) => setRateText(event.target.value)} placeholder="Valor da diária" data-testid="rate-input" />
@@ -402,6 +458,20 @@ export function ReservationPage() {
               </li>
             ))}
           </ul>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={cancelOpen} onOpenChange={setCancelOpen}>
+        <DialogContent>
+          <DialogTitle>Cancelar reserva</DialogTitle>
+          <DialogDescription>Informe o motivo. O período volta a ficar livre e, se já houve check-in, a UH vai para limpeza.</DialogDescription>
+          <label className="mt-3 flex flex-col gap-1 text-sm font-semibold text-navy-900" htmlFor="stay-cancel-reason">
+            Motivo
+            <Textarea id="stay-cancel-reason" value={cancelReason} onChange={(event) => setCancelReason(event.target.value)} />
+          </label>
+          <div className="mt-4 grid gap-2 sm:grid-cols-2">
+            <Button variant="outline" onClick={() => setCancelOpen(false)} disabled={saving}>Voltar</Button>
+            <Button variant="danger" onClick={() => void confirmCancel()} disabled={saving}>{saving ? 'Salvando…' : 'Cancelar reserva'}</Button>
+          </div>
         </DialogContent>
       </Dialog>
       <ConfirmDialog

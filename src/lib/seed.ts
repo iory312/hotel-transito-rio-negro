@@ -1,16 +1,26 @@
 import { addDays, addYears, todayISO } from '@/lib/dates.ts'
-import type { DemoDatabase } from '@/lib/types.ts'
+import { categoryIdForSort } from '@/lib/desk.ts'
+import type { DemoDatabase, RoomCategory } from '@/lib/types.ts'
+
+export const SEED_CATEGORIES: RoomCategory[] = [
+  { id: 'cat-oficial', name: 'Apartamento oficial', capacity: 3, sortOrder: 1, active: true },
+  { id: 'cat-praca', name: 'Apartamento praça', capacity: 4, sortOrder: 2, active: true },
+  { id: 'cat-suite', name: 'Suíte', capacity: 2, sortOrder: 3, active: true },
+]
 
 export function createSeedDatabase(today = todayISO()): DemoDatabase {
+  const categories = SEED_CATEGORIES.map((category) => ({ ...category }))
   const rooms = Array.from({ length: 14 }, (_, index) => {
     const number = String(index + 1).padStart(2, '0')
+    const sortOrder = index + 1
     return {
       id: `room-${number}`,
       number,
       name: `Quarto ${number}`,
+      categoryId: categoryIdForSort(sortOrder, categories),
       housekeeping: number === '02' || number === '09' ? ('limpeza' as const) : ('limpa' as const),
       notes: '',
-      sortOrder: index + 1,
+      sortOrder,
       active: true,
     }
   })
@@ -22,6 +32,7 @@ export function createSeedDatabase(today = todayISO()): DemoDatabase {
   const brunoIn = addDays(today, 2)
 
   return {
+    categories,
     rooms,
     settings: { hotelName: 'Hotel de Trânsito Rio Negro', exemptionAge: 6 },
     guestDependents: [
@@ -96,6 +107,15 @@ export function createSeedDatabase(today = todayISO()): DemoDatabase {
         phone: '(92) 99201-4470',
         notes: '',
       },
+      {
+        id: 'guest-rita',
+        fullName: 'Rita Nunes Paiva',
+        rank: 'Primeiro-Tenente',
+        nip: '08.5520.17',
+        om: 'Hospital Naval de Manaus',
+        phone: '(92) 98111-2020',
+        notes: '',
+      },
     ],
     reservations: [
       {
@@ -108,6 +128,8 @@ export function createSeedDatabase(today = todayISO()): DemoDatabase {
         status: 'ocupada',
         notes: 'Chegou com a família no voo da noite.',
         blockReason: '',
+        blockKind: '',
+        cancelReason: '',
         createdAt: pauloIn,
       },
       {
@@ -120,6 +142,8 @@ export function createSeedDatabase(today = todayISO()): DemoDatabase {
         status: 'reservada',
         notes: 'Entrada prevista para hoje.',
         blockReason: '',
+        blockKind: '',
+        cancelReason: '',
         createdAt: addDays(today, -3),
       },
       {
@@ -132,19 +156,37 @@ export function createSeedDatabase(today = todayISO()): DemoDatabase {
         status: 'ocupada',
         notes: '',
         blockReason: '',
+        blockKind: '',
+        cancelReason: '',
         createdAt: joseIn,
       },
       {
         id: 'stay-block',
         roomId: 'room-07',
         guestId: null,
-        checkIn: addDays(today, 1),
-        checkOut: addDays(today, 5),
+        checkIn: addDays(today, -1),
+        checkOut: addDays(today, 4),
         dailyRate: 0,
         status: 'bloqueado',
         notes: '',
         blockReason: 'Manutenção do climatizador',
+        blockKind: 'manutencao',
+        cancelReason: '',
         createdAt: addDays(today, -1),
+      },
+      {
+        id: 'stay-block-om',
+        roomId: 'room-08',
+        guestId: null,
+        checkIn: addDays(today, 2),
+        checkOut: addDays(today, 6),
+        dailyRate: 0,
+        status: 'bloqueado',
+        notes: '',
+        blockReason: 'Reservado pela OM para comitiva',
+        blockKind: 'om',
+        cancelReason: '',
+        createdAt: today,
       },
       {
         id: 'stay-marta',
@@ -156,6 +198,8 @@ export function createSeedDatabase(today = todayISO()): DemoDatabase {
         status: 'checkout',
         notes: 'Estadia encerrada. Quarto aguarda limpeza.',
         blockReason: '',
+        blockKind: '',
+        cancelReason: '',
         createdAt: martaIn,
       },
       {
@@ -168,7 +212,37 @@ export function createSeedDatabase(today = todayISO()): DemoDatabase {
         status: 'reservada',
         notes: '',
         blockReason: '',
+        blockKind: '',
+        cancelReason: '',
         createdAt: today,
+      },
+      {
+        id: 'stay-rita',
+        roomId: 'room-11',
+        guestId: 'guest-rita',
+        checkIn: addDays(today, 1),
+        checkOut: addDays(today, 4),
+        dailyRate: 95,
+        status: 'pre_reserva',
+        notes: 'Aguardando confirmação da OM.',
+        blockReason: '',
+        blockKind: '',
+        cancelReason: '',
+        createdAt: today,
+      },
+      {
+        id: 'stay-cancel',
+        roomId: 'room-14',
+        guestId: 'guest-rita',
+        checkIn: addDays(today, -6),
+        checkOut: addDays(today, -4),
+        dailyRate: 95,
+        status: 'cancelada',
+        notes: '',
+        blockReason: '',
+        blockKind: '',
+        cancelReason: 'Viagem adiada pela OM',
+        createdAt: addDays(today, -8),
       },
     ],
     dependents: [

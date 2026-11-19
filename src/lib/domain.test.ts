@@ -30,6 +30,8 @@ function stay(partial: Partial<Stay> & Pick<Stay, 'id' | 'status' | 'checkIn' | 
     dailyRate: 100,
     notes: '',
     blockReason: '',
+    blockKind: '',
+    cancelReason: '',
     dependents: [],
     payments: [],
     createdAt: checkIn,
@@ -108,6 +110,8 @@ describe('sobreposição e mapa', () => {
     status: 'reservada',
     notes: '',
     blockReason: '',
+    blockKind: '',
+    cancelReason: '',
     createdAt: checkIn,
   }
 

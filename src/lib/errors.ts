@@ -25,6 +25,9 @@ const SAFE_PREFIXES = [
   'Dados inválidos',
   'Já existe',
   'A idade',
+  'A capacidade',
+  'A UH',
+  'Categoria ',
 ]
 
 export function publicError(message: string | undefined, fallback: string): string {
