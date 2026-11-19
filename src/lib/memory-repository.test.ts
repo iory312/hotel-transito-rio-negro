@@ -89,6 +89,11 @@ describe('repositório em memória', () => {
     const all = await repo.listRooms({ includeInactive: true })
     expect(all).toHaveLength(14)
     expect(all.find((room) => room.id === 'room-14')?.active).toBe(false)
+    expect((await repo.listCategories()).map((category) => category.name)).toEqual([
+      'Apartamento oficial',
+      'Apartamento praça',
+      'Suíte',
+    ])
     await expect(
       repo.saveReservation({
         roomId: 'room-14',
@@ -102,5 +107,47 @@ describe('repositório em memória', () => {
         dependents: [],
       }),
     ).rejects.toThrow(/não encontrado/)
+  })
+
+  it('não deixa reserva sobrepor bloqueio e exige motivo para cancelar', async () => {
+    const today = todayISO()
+    const repo = createMemoryRepository(createSeedDatabase(today))
+    await expect(
+      repo.saveReservation({
+        roomId: 'room-07',
+        checkIn: today,
+        checkOut: addDays(today, 1),
+        dailyRate: 40,
+        notes: '',
+        kind: 'hospedagem',
+        blockReason: '',
+        guest: { fullName: 'Novo Militar', rank: 'Cabo', nip: '44.4444.44', om: 'OM', phone: '', notes: '' },
+        dependents: [],
+      }),
+    ).rejects.toThrow(/bloqueado/)
+    const id = await repo.saveReservation({
+      roomId: 'room-04',
+      checkIn: addDays(today, 10),
+      checkOut: addDays(today, 12),
+      dailyRate: 55,
+      notes: '',
+      kind: 'hospedagem',
+      blockReason: '',
+      booking: 'pre_reserva',
+      guest: { fullName: 'Novo Militar', rank: 'Cabo', nip: '44.4444.44', om: 'OM', phone: '', notes: '' },
+      dependents: [],
+    })
+    expect((await repo.getReservation(id))?.status).toBe('pre_reserva')
+    await expect(repo.cancelReservation(id, 'x')).rejects.toThrow(/motivo/)
+    await repo.cancelReservation(id, 'Viagem adiada')
+    expect((await repo.getReservation(id))?.status).toBe('cancelada')
+    await repo.addPayment({
+      reservationId: 'stay-aline',
+      amount: 10,
+      method: 'folha',
+      paidAt: today,
+      notes: '',
+    })
+    expect((await repo.getReservation('stay-aline'))?.payments.some((payment) => payment.method === 'folha')).toBe(true)
   })
 })

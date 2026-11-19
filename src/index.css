@@ -16,6 +16,7 @@
   --color-danger: #8d2f2f;
   --color-ok: #1d6b45;
   --color-reservado: #d5e4f6;
+  --color-pre: #efe4f6;
   --color-ocupado: #1e4b80;
   --color-limpeza: #f4e3c2;
   --color-encerrada: #e5e0d6;
@@ -59,8 +60,25 @@
   -webkit-overflow-scrolling: touch;
 }
 
-.blocked-fill {
+.blocked-fill,
+.block-outro {
   background: repeating-linear-gradient(135deg, #5e6772, #5e6772 8px, #4c555f 8px, #4c555f 16px);
+}
+
+.block-manutencao {
+  background: repeating-linear-gradient(135deg, #8a5a12, #8a5a12 8px, #6e4710 8px, #6e4710 16px);
+}
+
+.block-interdicao {
+  background: #8d2f2f;
+}
+
+.block-om {
+  background: #245c45;
+}
+
+.stay-block {
+  touch-action: none;
 }
 
 @media print {

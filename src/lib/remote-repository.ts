@@ -1,8 +1,9 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { DomainError, sanitizeSearch } from '@/lib/domain.ts'
+import { assertCancelReason, assertCategory, DomainError, sanitizeSearch } from '@/lib/domain.ts'
 import { publicError } from '@/lib/errors.ts'
 import type { HotelRepository } from '@/lib/repository.ts'
 import type {
+  BlockKind,
   Dependent,
   Guest,
   GuestDependent,
@@ -10,6 +11,7 @@ import type {
   Payment,
   PaymentMethod,
   ReservationStatus,
+  RoomCategory,
   Stay,
 } from '@/lib/types.ts'
 
@@ -48,6 +50,8 @@ interface StayRow {
   status: ReservationStatus
   notes: string
   block_reason: string
+  block_kind: BlockKind | '' | null
+  cancel_reason: string | null
   created_at: string
   rooms: { number: string; name: string } | { number: string; name: string }[] | null
   guests: GuestRow | GuestRow[] | null
@@ -56,7 +60,7 @@ interface StayRow {
 }
 
 const STAY_COLUMNS = `
-  id, room_id, guest_id, check_in, check_out, daily_rate, status, notes, block_reason, created_at,
+  id, room_id, guest_id, check_in, check_out, daily_rate, status, notes, block_reason, block_kind, cancel_reason, created_at,
   rooms (number, name),
   guests (id, full_name, rank, nip, om, phone, notes),
   reservation_dependents (id, full_name, birth_date),
@@ -114,6 +118,8 @@ function mapStay(row: StayRow): Stay {
     status: row.status,
     notes: row.notes,
     blockReason: row.block_reason,
+    blockKind: row.block_kind || '',
+    cancelReason: row.cancel_reason ?? '',
     dependents,
     payments,
     createdAt: row.created_at.slice(0, 10),
@@ -130,7 +136,7 @@ export function createRemoteRepository(client: SupabaseClient, host: string | nu
     mode: 'remote',
     host,
     async listRooms(options) {
-      let request = client.from('rooms').select('id, number, name, housekeeping, notes, sort_order, active').order('sort_order')
+      let request = client.from('rooms').select('id, number, name, category_id, housekeeping, notes, sort_order, active').order('sort_order')
       if (!options?.includeInactive) request = request.eq('active', true)
       const result = await request
       const rows = await expectOk(result, 'Não foi possível carregar os quartos.')
@@ -138,6 +144,7 @@ export function createRemoteRepository(client: SupabaseClient, host: string | nu
         id: room.id,
         number: room.number,
         name: room.name,
+        categoryId: room.category_id,
         housekeeping: room.housekeeping,
         notes: room.notes,
         sortOrder: room.sort_order,
@@ -145,14 +152,33 @@ export function createRemoteRepository(client: SupabaseClient, host: string | nu
       }))
     },
     async updateRoom(id, patch) {
-      const update: Record<string, string | boolean> = {}
+      const update: Record<string, string | boolean | null> = {}
       if (patch.number !== undefined) update.number = patch.number.trim()
       if (patch.name !== undefined) update.name = patch.name.trim()
       if (patch.notes !== undefined) update.notes = patch.notes
       if (patch.housekeeping) update.housekeeping = patch.housekeeping
       if (typeof patch.active === 'boolean') update.active = patch.active
+      if (patch.categoryId !== undefined) update.category_id = patch.categoryId
       const result = await client.from('rooms').update(update).eq('id', id)
       await expectOk(result, 'Não foi possível salvar o quarto.')
+    },
+    async listCategories() {
+      const result = await client.from('room_categories').select('id, name, capacity, sort_order, active').eq('active', true).order('sort_order')
+      const rows = await expectOk(result, 'Não foi possível carregar as categorias.')
+      return (rows as CategoryRow[]).map(mapCategory)
+    },
+    async saveCategory(input) {
+      assertCategory(input.name, input.capacity)
+      const name = input.name.trim()
+      if (input.id) {
+        const result = await client.from('room_categories').update({ name, capacity: input.capacity }).eq('id', input.id).select('id').maybeSingle()
+        const row = await expectWrite(result, 'Não foi possível salvar a categoria.')
+        if (!row || typeof (row as { id?: string }).id !== 'string') throw new DomainError('Categoria não encontrada.')
+        return (row as { id: string }).id
+      }
+      const result = await client.from('room_categories').insert({ name, capacity: input.capacity, sort_order: 100 }).select('id').single()
+      const row = await expectWrite(result, 'Não foi possível salvar a categoria.')
+      return (row as { id: string }).id
     },
     async listGuests(search) {
       const query = sanitizeSearch(search)
@@ -212,14 +238,10 @@ export function createRemoteRepository(client: SupabaseClient, host: string | nu
       if (typeof id !== 'string' || id.length === 0) throw new DomainError('Não foi possível salvar o hóspede.')
       return id
     },
-    async listReservations(from, to) {
-      const result = await client
-        .from('reservations')
-        .select(STAY_COLUMNS)
-        .neq('status', 'cancelada')
-        .lt('check_in', to)
-        .gt('check_out', from)
-        .limit(2000)
+    async listReservations(from, to, options) {
+      let request = client.from('reservations').select(STAY_COLUMNS).lt('check_in', to).gt('check_out', from).limit(2000)
+      if (!options?.includeCancelled) request = request.neq('status', 'cancelada')
+      const result = await request
       const rows = await expectOk(result, 'Não foi possível carregar as reservas.')
       return (rows as StayRow[]).map(mapStay)
     },
@@ -238,6 +260,8 @@ export function createRemoteRepository(client: SupabaseClient, host: string | nu
         notes: input.notes,
         kind: input.kind,
         block_reason: input.blockReason,
+        block_kind: input.blockKind ?? null,
+        booking: input.booking ?? null,
         guest: input.guest
           ? {
               id: input.guest.id ?? null,
@@ -259,6 +283,10 @@ export function createRemoteRepository(client: SupabaseClient, host: string | nu
     },
     async setStatus(id, status) {
       await expectOk(await client.rpc('set_stay_status', { p_id: id, p_status: status }), 'Não foi possível atualizar o status.')
+    },
+    async cancelReservation(id, reason) {
+      assertCancelReason(reason)
+      await expectOk(await client.rpc('cancel_stay', { p_id: id, p_reason: reason.trim() }), 'Não foi possível cancelar a reserva.')
     },
     async addPayment(input) {
       await expectOk(
@@ -290,10 +318,39 @@ export function createRemoteRepository(client: SupabaseClient, host: string | nu
   }
 }
 
+async function expectWrite<T>(result: { data: T; error: { message: string; code?: string } | null }, fallback: string): Promise<T> {
+  if (result.error) {
+    if (result.error.code === '23505' || /duplicate|unique/i.test(result.error.message)) {
+      throw new DomainError('Já existe categoria com este nome.')
+    }
+    throw new DomainError(publicError(result.error.message, fallback))
+  }
+  return result.data
+}
+
+function mapCategory(row: CategoryRow): RoomCategory {
+  return {
+    id: row.id,
+    name: row.name,
+    capacity: row.capacity,
+    sortOrder: row.sort_order,
+    active: row.active,
+  }
+}
+
+interface CategoryRow {
+  id: string
+  name: string
+  capacity: number
+  sort_order: number
+  active: boolean
+}
+
 interface RoomRow {
   id: string
   number: string
   name: string
+  category_id: string | null
   housekeeping: HousekeepingStatus
   notes: string
   sort_order: number

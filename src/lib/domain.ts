@@ -21,6 +21,7 @@ export class DomainError extends Error {
 }
 
 const TRANSITIONS: Record<ReservationStatus, ReservationStatus[]> = {
+  pre_reserva: ['reservada', 'ocupada', 'cancelada'],
   reservada: ['ocupada', 'cancelada'],
   ocupada: ['checkout', 'cancelada'],
   bloqueado: ['cancelada'],
@@ -39,8 +40,8 @@ export function rangesOverlap(aIn: string, aOut: string, bIn: string, bOut: stri
 
 export function findOverlap(
   candidate: { id?: string; roomId: string; checkIn: string; checkOut: string },
-  reservations: Reservation[],
-): Reservation | null {
+  reservations: Pick<Reservation, 'id' | 'roomId' | 'checkIn' | 'checkOut' | 'status'>[],
+): Pick<Reservation, 'id' | 'roomId' | 'checkIn' | 'checkOut' | 'status'> | null {
   return (
     reservations.find(
       (reservation) =>
@@ -101,6 +102,19 @@ export function assertDependents(dependents: DependentDraft[], today = todayISO(
 export function assertExemptionAge(age: number): void {
   if (!Number.isInteger(age) || age < 0 || age > 25) {
     throw new DomainError('A idade de isenção deve ser um número inteiro entre 0 e 25.')
+  }
+}
+
+export function assertCancelReason(reason: string): void {
+  const text = reason.trim()
+  if (text.length < 3 || text.length > 200) throw new DomainError('Informe o motivo do cancelamento.')
+}
+
+export function assertCategory(name: string, capacity: number): void {
+  const trimmed = name.trim()
+  if (trimmed.length < 2 || trimmed.length > 80) throw new DomainError('Informe o nome da categoria.')
+  if (!Number.isInteger(capacity) || capacity < 1 || capacity > 13) {
+    throw new DomainError('A capacidade deve ser um inteiro de 1 a 13.')
   }
 }
 
@@ -211,7 +225,9 @@ function emptyBill(exemptionAge: number, lines: Bill['lines'], paid: number, mes
 export function dayMovement(stays: Stay[], date: string): DayMovement {
   const active = stays.filter((stay) => stay.status !== 'cancelada' && stay.status !== 'bloqueado')
   return {
-    checkIns: active.filter((stay) => stay.checkIn === date && (stay.status === 'reservada' || stay.status === 'ocupada')),
+    checkIns: active.filter(
+      (stay) => stay.checkIn === date && (stay.status === 'pre_reserva' || stay.status === 'reservada' || stay.status === 'ocupada'),
+    ),
     checkOuts: active.filter((stay) => stay.checkOut === date && (stay.status === 'ocupada' || stay.status === 'checkout')),
     inHouse: active.filter((stay) => stay.status === 'ocupada' && stay.checkIn <= date && stay.checkOut > date),
   }
@@ -264,7 +280,7 @@ export function occupancy(activeRooms: number, stays: Stay[], from: string, toEx
       stays
         .filter(
           (stay) =>
-            (stay.status === 'reservada' || stay.status === 'ocupada' || stay.status === 'checkout') &&
+            (stay.status === 'pre_reserva' || stay.status === 'reservada' || stay.status === 'ocupada' || stay.status === 'checkout') &&
             stay.checkIn <= day &&
             stay.checkOut > day,
         )

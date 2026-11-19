@@ -1,4 +1,4 @@
-import { CalendarRange, ClipboardList, DoorOpen, LogOut, Settings, Users } from 'lucide-react'
+import { CalendarRange, ClipboardList, DoorOpen, House, List, LogOut, Settings, Users } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
 import { useSession } from '@/context/session.tsx'
@@ -6,7 +6,9 @@ import { HOTEL_NAME } from '@/lib/labels.ts'
 import { cn } from '@/lib/utils.ts'
 
 const NAV = [
-  { to: '/', label: 'Mapa', icon: CalendarRange, end: true },
+  { to: '/', label: 'Hoje', icon: House, end: true },
+  { to: '/mapa', label: 'Mapa', icon: CalendarRange, end: true },
+  { to: '/reservas', label: 'Reservas', icon: List, end: true },
   { to: '/hospedes', label: 'Hóspedes', icon: Users, end: false },
   { to: '/quartos', label: 'Quartos', icon: DoorOpen, end: false },
   { to: '/relatorios', label: 'Relatórios', icon: ClipboardList, end: false },
@@ -16,13 +18,15 @@ const NAV = [
 function titleFor(path: string): string {
   if (path.startsWith('/reserva/nova')) return 'Nova reserva'
   if (path.startsWith('/reserva/')) return 'Reserva'
+  if (path.startsWith('/mapa')) return 'Mapa de reservas'
+  if (path.startsWith('/reservas')) return 'Reservas'
   if (path === '/hospedes/novo') return 'Novo hóspede'
   if (path.startsWith('/hospedes/')) return 'Hóspede'
   if (path.startsWith('/hospedes')) return 'Hóspedes'
   if (path.startsWith('/quartos')) return 'Quartos'
   if (path.startsWith('/relatorios')) return 'Relatórios'
   if (path.startsWith('/admin')) return 'Administração'
-  return 'Mapa de reservas'
+  return 'Hoje'
 }
 
 function navLabel(label: string): string {
@@ -87,8 +91,8 @@ export function Shell({ children }: { children: ReactNode }) {
         <div className="min-h-0 flex-1 overflow-hidden pb-[calc(4.25rem+env(safe-area-inset-bottom))] lg:pb-0">
           <div className="h-full min-h-0">{children}</div>
         </div>
-        <nav className="no-print fixed inset-x-0 bottom-0 z-40 border-t border-line bg-card pb-[env(safe-area-inset-bottom)] lg:hidden">
-          <ul className="grid grid-cols-5">
+        <nav className="no-print fixed inset-x-0 bottom-0 z-40 overflow-x-auto border-t border-line bg-card pb-[env(safe-area-inset-bottom)] lg:hidden">
+          <ul className="flex w-max min-w-full">
             {NAV.map((item) => (
               <li key={item.to}>
                 <NavLink
@@ -97,7 +101,7 @@ export function Shell({ children }: { children: ReactNode }) {
                   data-testid={`nav-${item.label.toLocaleLowerCase('pt-BR')}`}
                   className={({ isActive }) =>
                     cn(
-                      'flex min-h-14 flex-col items-center justify-center gap-0.5 px-1 text-[10px] font-semibold',
+                      'flex min-h-14 w-[4.6rem] flex-col items-center justify-center gap-0.5 px-1 text-[10px] font-semibold',
                       isActive ? 'text-navy-800' : 'text-muted',
                     )
                   }

@@ -1,5 +1,7 @@
 import { isISODate, todayISO } from '@/lib/dates.ts'
 import {
+  assertCancelReason,
+  assertCategory,
   assertDependents,
   assertExemptionAge,
   assertGuest,
@@ -11,9 +13,10 @@ import {
   shouldMarkCleaning,
 } from '@/lib/domain.ts'
 import type { GuestProfile, HotelRepository } from '@/lib/repository.ts'
-import type { DemoDatabase, PaymentMethod, Reservation, Room, SaveGuestInput, SaveStayInput, Stay } from '@/lib/types.ts'
+import type { BlockKind, DemoDatabase, PaymentMethod, Reservation, Room, RoomCategory, SaveGuestInput, SaveStayInput, Stay } from '@/lib/types.ts'
 
-const PAYMENT_METHODS = new Set<PaymentMethod>(['dinheiro', 'pix', 'transferencia', 'cartao'])
+const PAYMENT_METHODS = new Set<PaymentMethod>(['dinheiro', 'pix', 'transferencia', 'cartao', 'folha', 'outro'])
+const BLOCK_KINDS = new Set<BlockKind>(['manutencao', 'interdicao', 'om', 'outro'])
 
 function clone<T>(value: T): T {
   return structuredClone(value)
@@ -80,7 +83,41 @@ export function createMemoryRepository(
       if (patch.notes !== undefined) room.notes = patch.notes
       if (patch.housekeeping) room.housekeeping = patch.housekeeping
       if (typeof patch.active === 'boolean') room.active = patch.active
+      if (patch.categoryId !== undefined) {
+        if (patch.categoryId !== null && !db.categories.some((category) => category.id === patch.categoryId)) {
+          throw new DomainError('Categoria não encontrada.')
+        }
+        room.categoryId = patch.categoryId
+      }
       persist()
+    },
+    async listCategories() {
+      return clone(db.categories.filter((category) => category.active).sort((a, b) => a.sortOrder - b.sortOrder))
+    },
+    async saveCategory(input) {
+      assertCategory(input.name, input.capacity)
+      const name = input.name.trim()
+      const duplicate = db.categories.find((category) => category.id !== input.id && category.name.toLocaleLowerCase('pt-BR') === name.toLocaleLowerCase('pt-BR'))
+      if (duplicate) throw new DomainError('Já existe categoria com este nome.')
+      if (input.id) {
+        const current = db.categories.find((category) => category.id === input.id)
+        if (!current) throw new DomainError('Categoria não encontrada.')
+        current.name = name
+        current.capacity = input.capacity
+        persist()
+        return current.id
+      }
+      const id = crypto.randomUUID()
+      const next: RoomCategory = {
+        id,
+        name,
+        capacity: input.capacity,
+        sortOrder: db.categories.reduce((max, category) => Math.max(max, category.sortOrder), 0) + 1,
+        active: true,
+      }
+      db.categories.push(next)
+      persist()
+      return id
     },
     async listGuests(search) {
       const query = sanitizeSearch(search).toLocaleLowerCase('pt-BR')
@@ -143,9 +180,12 @@ export function createMemoryRepository(
       persist()
       return id
     },
-    async listReservations(from, to) {
+    async listReservations(from, to, options) {
       const rows = db.reservations.filter(
-        (reservation) => reservation.status !== 'cancelada' && reservation.checkIn < to && reservation.checkOut > from,
+        (reservation) =>
+          (options?.includeCancelled || reservation.status !== 'cancelada') &&
+          reservation.checkIn < to &&
+          reservation.checkOut > from,
       )
       return staysOf(db, rows)
     },
@@ -167,9 +207,11 @@ export function createMemoryRepository(
         checkIn: input.checkIn,
         checkOut: input.checkOut,
         dailyRate: input.kind === 'bloqueio' ? 0 : (input.dailyRate ?? 0),
-        status: existing?.status ?? (input.kind === 'bloqueio' ? 'bloqueado' : 'reservada'),
+        status: existing?.status ?? (input.kind === 'bloqueio' ? 'bloqueado' : input.booking === 'pre_reserva' ? 'pre_reserva' : 'reservada'),
         notes: input.notes,
         blockReason: input.kind === 'bloqueio' ? input.blockReason.trim() : '',
+        blockKind: input.kind === 'bloqueio' ? resolveBlockKind(input.blockKind) : '',
+        cancelReason: existing?.cancelReason ?? '',
         createdAt: existing?.createdAt ?? todayISO(),
       }
       if (existing) {
@@ -198,6 +240,20 @@ export function createMemoryRepository(
       const previous = reservation.status
       reservation.status = status
       if (shouldMarkCleaning(previous, status)) {
+        const room = db.rooms.find((item) => item.id === reservation.roomId)
+        if (room) room.housekeeping = 'limpeza'
+      }
+      persist()
+    },
+    async cancelReservation(id, reason) {
+      assertCancelReason(reason)
+      const reservation = reservationOrThrow(id)
+      if (reservation.status === 'bloqueado') throw new DomainError('Bloqueio libera pela ação de desbloquear.')
+      assertTransition(reservation.status, 'cancelada')
+      const previous = reservation.status
+      reservation.status = 'cancelada'
+      reservation.cancelReason = reason.trim()
+      if (shouldMarkCleaning(previous, 'cancelada')) {
         const room = db.rooms.find((item) => item.id === reservation.roomId)
         if (room) room.housekeeping = 'limpeza'
       }
@@ -243,6 +299,12 @@ export function createMemoryRepository(
       persist()
     },
   }
+}
+
+function resolveBlockKind(kind: SaveStayInput['blockKind']): BlockKind {
+  if (!kind) return 'outro'
+  if (!BLOCK_KINDS.has(kind)) throw new DomainError('Dados inválidos.')
+  return kind
 }
 
 function upsertGuest(db: DemoDatabase, guest: NonNullable<SaveStayInput['guest']>): string {

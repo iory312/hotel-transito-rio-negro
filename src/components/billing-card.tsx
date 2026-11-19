@@ -1,11 +1,19 @@
+import { paymentStanding } from '@/lib/desk.ts'
+import { PAYMENT_STATUS_LABEL } from '@/lib/labels.ts'
 import { formatMoney } from '@/lib/money.ts'
 import type { Bill } from '@/lib/types.ts'
 
 export function BillingCard({ bill }: { bill: Bill }) {
+  const standing = paymentStanding(bill)
   const balanceLabel = bill.balance > 0 ? 'Saldo pendente' : bill.balance < 0 ? 'Crédito do hóspede' : 'Quitado'
   return (
     <section className="rounded-md border border-line bg-card p-4" aria-live="polite">
-      <h2 className="text-base font-semibold text-navy-900">Conta da estada</h2>
+      <div className="flex items-center justify-between gap-2">
+        <h2 className="text-base font-semibold text-navy-900">Conta da estada</h2>
+        <span className={standing === 'pago' ? 'text-sm font-semibold text-ok' : standing === 'parcial' ? 'text-sm font-semibold text-navy-800' : 'text-sm font-semibold text-danger'}>
+          {PAYMENT_STATUS_LABEL[standing]}
+        </span>
+      </div>
       <p className="mt-1 text-sm leading-5 text-muted">
         O titular sempre paga. Dependente com mais de {bill.exemptionAge} anos na data de entrada também paga. Com{' '}
         {bill.exemptionAge} anos ou menos, é isento.

@@ -1,4 +1,5 @@
 import { createMemoryRepository } from '@/lib/memory-repository.ts'
+import { categoryIdForSort } from '@/lib/desk.ts'
 import { createSeedDatabase } from '@/lib/seed.ts'
 import { DEMO_EMAIL, DEMO_NAME, DEMO_PASSWORD } from '@/lib/labels.ts'
 import { DomainError } from '@/lib/domain.ts'
@@ -44,6 +45,15 @@ function readDatabase(): DemoDatabase {
     const parsed = JSON.parse(raw) as DemoDatabase
     if (!Array.isArray(parsed.rooms) || parsed.rooms.length !== 14 || !parsed.settings) return createSeedDatabase()
     if (!Array.isArray(parsed.guestDependents)) parsed.guestDependents = []
+    const seed = createSeedDatabase()
+    if (!Array.isArray(parsed.categories) || parsed.categories.length === 0) parsed.categories = seed.categories
+    for (const room of parsed.rooms) {
+      if (!room.categoryId) room.categoryId = categoryIdForSort(room.sortOrder, parsed.categories)
+    }
+    for (const reservation of parsed.reservations ?? []) {
+      if (!reservation.blockKind) reservation.blockKind = reservation.status === 'bloqueado' ? 'manutencao' : ''
+      if (typeof reservation.cancelReason !== 'string') reservation.cancelReason = ''
+    }
     return parsed
   } catch {
     return createSeedDatabase()

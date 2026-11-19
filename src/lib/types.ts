@@ -1,12 +1,24 @@
-export type ReservationStatus = 'reservada' | 'ocupada' | 'checkout' | 'cancelada' | 'bloqueado'
+export type ReservationStatus = 'pre_reserva' | 'reservada' | 'ocupada' | 'checkout' | 'cancelada' | 'bloqueado'
 export type HousekeepingStatus = 'limpa' | 'limpeza'
-export type PaymentMethod = 'dinheiro' | 'pix' | 'transferencia' | 'cartao'
+export type PaymentMethod = 'dinheiro' | 'pix' | 'transferencia' | 'cartao' | 'folha' | 'outro'
+export type PaymentStanding = 'pendente' | 'parcial' | 'pago'
+export type BlockKind = 'manutencao' | 'interdicao' | 'om' | 'outro'
 export type StayKind = 'hospedagem' | 'bloqueio'
+export type BookingStatus = 'pre_reserva' | 'reservada'
+
+export interface RoomCategory {
+  id: string
+  name: string
+  capacity: number
+  sortOrder: number
+  active: boolean
+}
 
 export interface Room {
   id: string
   number: string
   name: string
+  categoryId: string | null
   housekeeping: HousekeepingStatus
   notes: string
   sortOrder: number
@@ -33,6 +45,8 @@ export interface Reservation {
   status: ReservationStatus
   notes: string
   blockReason: string
+  blockKind: BlockKind | ''
+  cancelReason: string
   createdAt: string
 }
 
@@ -70,6 +84,8 @@ export interface Stay {
   status: ReservationStatus
   notes: string
   blockReason: string
+  blockKind: BlockKind | ''
+  cancelReason: string
   dependents: Dependent[]
   payments: Payment[]
   createdAt: string
@@ -110,11 +126,14 @@ export interface SaveStayInput {
   notes: string
   kind: StayKind
   blockReason: string
+  blockKind?: BlockKind
+  booking?: BookingStatus
   guest: GuestDraft | null
   dependents: DependentDraft[]
 }
 
 export interface DemoDatabase {
+  categories: RoomCategory[]
   rooms: Room[]
   guests: Guest[]
   guestDependents: GuestDependent[]

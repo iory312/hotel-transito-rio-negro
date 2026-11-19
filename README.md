@@ -69,6 +69,14 @@ Não há dado de militar na semente. Os exemplos de hóspede existem apenas no m
 
 Esse arquivo libera o cadastro de hóspede novo em `save_guest` (a função inicial só atualizava quem já existia), grava os dependentes do militar em `guest_dependents` e permite marcar a UH como inativa. Sem ele, a recepção não consegue cadastrar hóspede fora de uma reserva.
 
+6. Execute em seguida, nesta ordem:
+
+`supabase/migrations/20261119120000_room_categories.sql`
+
+`supabase/migrations/20261119121500_reception_lifecycle.sql`
+
+O primeiro cria as categorias de UH (apartamento oficial, apartamento praça e suíte), com capacidade, e liga cada quarto a uma categoria. O segundo acrescenta pré-reserva, motivo de cancelamento, tipo de bloqueio (manutenção, interdição, reservado pela OM, outro), desconto em folha e a forma “outro”, e o gatilho que impede reserva e bloqueio no mesmo período da mesma UH. Os status antigos continuam válidos. A diária segue livre, gravada em cada reserva.
+
 ## Criar o primeiro usuário da recepção
 
 O cadastro público não autoriza ninguém. Um login só lê o hotel depois de entrar em `staff`.
@@ -102,11 +110,13 @@ O nome exibido na recepção fica em `profiles` e é editado em Administração.
 
 ## Telas
 
-- **Mapa de reservas:** quartos à esquerda, dias no topo, estadias coloridas (livre, reservado, ocupado, limpeza, bloqueado, encerrada). **Nova reserva** fica no topo; um dia livre do quarto também abre a reserva. No celular, o calendário desliza na horizontal e a coluna do quarto fica fixa.
+- **Hoje:** tela inicial depois do login. Cartões de chegadas, saídas, hospedados, UHs livres, em limpeza e bloqueadas, com check-in e check-out rápidos e a situação de cada UH.
+- **Mapa de reservas:** quartos à esquerda, dias no topo, estadias coloridas (livre, pré-reserva, confirmada, hospedado, limpeza, bloqueio e finalizada). Dá para arrastar uma reserva para outra UH ou outras datas, com confirmação, e puxar as bordas para mudar a entrada ou a saída. **Bloquear UH** lança manutenção, interdição ou reserva da OM. O filtro de categoria fica no topo. **Nova reserva** também fica no topo; um dia livre do quarto abre a reserva. No celular, o calendário desliza na horizontal e a coluna do quarto fica fixa.
 - **Reserva:** datas, quarto, diária digitada na estada, titular, dependentes, conta ao vivo, pagamentos, check-in, check-out, cancelamento e bloqueio.
-- **Hóspedes:** lista, busca e **Novo hóspede** (nome, posto, NIP, OM, telefone e dependentes), com edição do cadastro.
-- **Quartos:** as 14 UHs, com número, nome, notas, limpeza e ativo. UH inativa sai do mapa.
-- **Relatórios:** entradas, saídas, quem está na casa, café da manhã e ocupação do mês.
+- **Reservas:** tabela com busca (nome, NIP, número da UH), filtro de status e período, ordenação, abertura e cancelamento com motivo.
+- **Hóspedes:** lista, busca e **Novo hóspede** (nome, posto, NIP, OM, telefone e dependentes), com edição do cadastro, histórico de estadas e total gasto.
+- **Quartos:** as 14 UHs, com número, nome, categoria, capacidade, notas, limpeza e ativo. UH inativa sai do mapa.
+- **Relatórios:** ocupação do período, diárias previstas e recebidas, hóspedes por OM (com CSV), além de entradas, saídas, quem está na casa e café da manhã.
 - **Administração:** idade de isenção e nome da recepção.
 
 ## Publicar no GitHub Pages
